@@ -89,11 +89,7 @@ void TIM7_IRQHandler() {
     drive_column(col);
 }
 
-
-
-
-
-
+uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700 };
 
 //===========================================================================
 // Initialize the SPI1 peripheral.
@@ -108,10 +104,10 @@ void init_spi1(void) {
     SPI1 -> CR1 |= SPI_CR1_BR; // high as possible?
     SPI1 -> CR1 |= SPI_CR1_MSTR; // this or cr2_ssoe ?
     SPI1 -> CR2 &= ~SPI_CR2_DS;
-    SPI1 -> CR2 |= (SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2) // 8-bit data size
+    SPI1 -> CR2 |= (SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2); // 8-bit data size
     SPI1 -> CR1 |= SPI_CR1_SSM;
     SPI1 -> CR1 |= SPI_CR1_SSI;
-    SPI1 -> CR2 |= SPI_CR2_FRXTH_RXNE;
+    SPI1 -> CR2 |= SPI_CR2_FRXTH;
     SPI1 -> CR1 |= SPI_CR1_SPE;
 }
 
@@ -119,30 +115,30 @@ void init_spi1(void) {
 // Configure the SPI2 peripheral to trigger the DMA channel when the
 // transmitter is empty.  Use the code from setup_dma from lab 5.
 //===========================================================================
-void spi2_setup_dma(void) {
-    RCC -> AHBENR |= RCC_AHBENR_DMA1EN;
-    ADC1->CFGR1|=ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
-    DMA1_Channel5 -> CCR &= ~DMA_CCR_EN;
-    DMA1_Channel5 -> CMAR = (uint32_t)(msg);
-    DMA1_Channel5 -> CPAR = (uint32_t)(&SPI2->DR);
-    DMA1_Channel5->CNDTR = 8;
-    DMA1_Channel5 -> CCR |= DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_CIRC;
-    SPI2->CR2 |= 0x2;
-}
+// void spi2_setup_dma(void) {
+//     RCC -> AHBENR |= RCC_AHBENR_DMA1EN;
+//     ADC1->CFGR1|=ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
+//     DMA1_Channel5 -> CCR &= ~DMA_CCR_EN;
+//     DMA1_Channel5 -> CMAR = (uint32_t)(msg);
+//     DMA1_Channel5 -> CPAR = (uint32_t)(&SPI2->DR);
+//     DMA1_Channel5->CNDTR = 8;
+//     DMA1_Channel5 -> CCR |= DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_CIRC;
+//     SPI2->CR2 |= 0x2;
+// }
 
 
 //===========================================================================
 // Enable the DMA channel.
 //===========================================================================
-void spi2_enable_dma(void) {
-    DMA1_Channel5 -> CCR |= DMA_CCR_EN;
-}
+// void spi2_enable_dma(void) {
+//     DMA1_Channel5 -> CCR |= DMA_CCR_EN;
+// }
 
 
 //===========================================================================
 // Initialize the SPI1 for TFT DISPLAY
 //===========================================================================
-void enable_sdcar()
+void enable_sdcard()
 {
     //set PB2 to low
     GPIOB -> ODR = (0 << 2);
@@ -156,7 +152,7 @@ void disable_sdcard()
 }
 void init_sdcard_io()
 {
-    init_spi_slow();
+    init_spi1();
     //configure PB2 as output
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB -> MODER |= (GPIO_MODER_MODER2_0);
@@ -180,13 +176,12 @@ void init_lcd_spi(){
     GPIOB -> MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER11_0 | GPIO_MODER_MODER14_0);
     GPIOB -> MODER &= ~(GPIO_MODER_MODER8_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER14_1);
     //call init_spi_slow
-    init_spi1_slow();
+    init_spi1();
     //call sdcard_io_high_speed
     sdcard_io_high_speed();
 }
 
 //===========================================================================
-=======
 // This is the 34-entry buffer to be copied into SPI1.
 // Each element is a 16-bit value that is either character data or a command.
 // Element 0 is the command to set the cursor to the first position of line 1.
@@ -232,26 +227,10 @@ void spi1_enable_dma(void) {
 int main(void) {
     internal_clock();
 
-    msg[0] |= font['E'];
-    msg[1] |= font['C'];
-    msg[2] |= font['E'];
-    msg[3] |= font[' '];
-    msg[4] |= font['3'];
-    msg[5] |= font['6'];
-    msg[6] |= font['2'];
-    msg[7] |= font[' '];
-
     // GPIO enable
     enable_ports();
     // setup keyboard
-    //init_tim7();
-
-    // LED array Bit Bang
-// #define BIT_BANG
-#if defined(BIT_BANG)
-    setup_bb();
-    drive_bb();
-#endif
+    init_tim7();
 
     // Direct SPI peripheral to drive LED display
 // #define SPI_LEDS
@@ -290,8 +269,15 @@ int main(void) {
     spi1_enable_dma();
 #endif
 
+    init_spi1();
+    enable_sdcard();
+    disable_sdcard();
+    init_sdcard_io();
+    sdcard_io_high_speed();
+    init_lcd_spi();
+
     // Uncomment when you are ready to generate a code.
-    autotest();
+    // autotest();
 
     // Game on!  The goal is to score 100 points.
     //game();
