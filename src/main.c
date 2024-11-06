@@ -90,6 +90,11 @@ void TIM7_IRQHandler() {
 }
 
 
+
+
+
+
+
 //===========================================================================
 // Initialize the SPI1 peripheral.
 //===========================================================================
@@ -133,7 +138,55 @@ void spi2_enable_dma(void) {
     DMA1_Channel5 -> CCR |= DMA_CCR_EN;
 }
 
+
 //===========================================================================
+// Initialize the SPI1 for TFT DISPLAY
+//===========================================================================
+void enable_sdcar()
+{
+    //set PB2 to low
+    GPIOB -> ODR = (0 << 2);
+  
+}
+void disable_sdcard()
+{
+    //set PB2 high
+    GPIOB -> ODR = (1 << 2);
+
+}
+void init_sdcard_io()
+{
+    init_spi_slow();
+    //configure PB2 as output
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+    GPIOB -> MODER |= (GPIO_MODER_MODER2_0);
+    GPIOB -> MODER &= ~(GPIO_MODER_MODER2_1);
+    disable_sdcard();
+}
+
+void sdcard_io_high_speed()
+{
+    //disable SPI1 channel
+    RCC -> APB2ENR &= ~RCC_APB2ENR_SPI1EN;
+    //set SP1 BR
+    SPI1 -> CR1 |= SPI_CR1_BR_0;
+    //renable SPI1
+    RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
+}
+
+void init_lcd_spi(){
+    //PB8, PB11, PB14 as GPIO outputs
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+    GPIOB -> MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER11_0 | GPIO_MODER_MODER14_0);
+    GPIOB -> MODER &= ~(GPIO_MODER_MODER8_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER14_1);
+    //call init_spi_slow
+    init_spi1_slow();
+    //call sdcard_io_high_speed
+    sdcard_io_high_speed();
+}
+
+//===========================================================================
+=======
 // This is the 34-entry buffer to be copied into SPI1.
 // Each element is a 16-bit value that is either character data or a command.
 // Element 0 is the command to set the cursor to the first position of line 1.
