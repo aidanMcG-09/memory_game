@@ -75,46 +75,46 @@ void small_delay(void) {
 // Set the MOSI bit, then set the clock high and low.
 // Pause between doing these steps with small_delay().
 //===========================================================================
-void bb_write_bit(int val) {
-    // CS (PB12)
-    // SCK (PB13)
-    // SDI (PB15)
-    if (val == 0) {
-        GPIOB -> BRR |= GPIO_BRR_BR_15;
-    }
-    else {
-        GPIOB -> BSRR |= GPIO_BSRR_BS_15;
-    }
-    GPIOB -> BSRR |= GPIO_BSRR_BS_13;
-    small_delay();
-    GPIOB -> BRR |= GPIO_BRR_BR_13;
-    small_delay();
+// void bb_write_bit(int val) {
+//     // CS (PB12)
+//     // SCK (PB13)
+//     // SDI (PB15)
+//     if (val == 0) {
+//         GPIOB -> BRR |= GPIO_BRR_BR_15;
+//     }
+//     else {
+//         GPIOB -> BSRR |= GPIO_BSRR_BS_15;
+//     }
+//     GPIOB -> BSRR |= GPIO_BSRR_BS_13;
+//     small_delay();
+//     GPIOB -> BRR |= GPIO_BRR_BR_13;
+//     small_delay();
 
-}
+// }
 
-//===========================================================================
-// Set CS (PB12) low,
-// write 16 bits using bb_write_bit,
-// then set CS high.
-//===========================================================================
-void bb_write_halfword(int halfword) {
-    GPIOB -> BRR |= GPIO_BRR_BR_12;
-    for (int i = 15; i >= 0; i--) {
-        bb_write_bit((halfword >> i) & 1);
-    }
-    GPIOB -> BSRR |= GPIO_BSRR_BS_12;
-}
+// //===========================================================================
+// // Set CS (PB12) low,
+// // write 16 bits using bb_write_bit,
+// // then set CS high.
+// //===========================================================================
+// void bb_write_halfword(int halfword) {
+//     GPIOB -> BRR |= GPIO_BRR_BR_12;
+//     for (int i = 15; i >= 0; i--) {
+//         bb_write_bit((halfword >> i) & 1);
+//     }
+//     GPIOB -> BSRR |= GPIO_BSRR_BS_12;
+// }
 
-//===========================================================================
-// Continually bitbang the msg[] array.
-//===========================================================================
-void drive_bb(void) {
-    for(;;)
-        for(int d=0; d<8; d++) {
-            bb_write_halfword(msg[d]);
-            nano_wait(1000000); // wait 1 ms between digits
-        }
-}
+// //===========================================================================
+// // Continually bitbang the msg[] array.
+// //===========================================================================
+// void drive_bb(void) {
+//     for(;;)
+//         for(int d=0; d<8; d++) {
+//             bb_write_halfword(msg[d]);
+//             nano_wait(1000000); // wait 1 ms between digits
+//         }
+// }
 
 //============================================================================
 // Configure Timer 15 for an update rate of 1 kHz.
@@ -155,6 +155,11 @@ void TIM7_IRQHandler() {
     col = (col + 1) & 3;
     drive_column(col);
 }
+
+
+
+
+
 
 
 //===========================================================================
@@ -247,6 +252,55 @@ void spi1_display2(const char *string) {
     for (int i = 0; string[i] == '\0'; i++) {
         spi_data(string[i]);
     }
+}
+
+
+
+
+//===========================================================================
+// Initialize the SPI1 for TFT DISPLAY
+//===========================================================================
+void enable_sdcar()
+{
+    //set PB2 to low
+    GPIOB -> ODR = (0 << 2);
+  
+}
+void disable_sdcard()
+{
+    //set PB2 high
+    GPIOB -> ODR = (1 << 2);
+
+}
+void init_sdcard_io()
+{
+    init_spi_slow();
+    //configure PB2 as output
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+    GPIOB -> MODER |= (GPIO_MODER_MODER2_0);
+    GPIOB -> MODER &= ~(GPIO_MODER_MODER2_1);
+    disable_sdcard();
+}
+
+void sdcard_io_high_speed()
+{
+    //disable SPI1 channel
+    RCC -> APB2ENR &= ~RCC_APB2ENR_SPI1EN;
+    //set SP1 BR
+    SPI1 -> CR1 |= SPI_CR1_BR_0;
+    //renable SPI1
+    RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
+}
+
+void init_lcd_spi(){
+    //PB8, PB11, PB14 as GPIO outputs
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+    GPIOB -> MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER11_0 | GPIO_MODER_MODER14_0);
+    GPIOB -> MODER &= ~(GPIO_MODER_MODER8_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER14_1);
+    //call init_spi_slow
+    init_spi1_slow();
+    //call sdcard_io_high_speed
+    sdcard_io_high_speed();
 }
 
 //===========================================================================
