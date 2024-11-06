@@ -38,7 +38,6 @@ void enable_ports(void) {
     GPIOC->PUPDR |= 0x55;
 }
 
-
 uint8_t col; // the column being scanned
 
 void drive_column(int);   // energize one of the column outputs
@@ -49,72 +48,6 @@ char get_keypress(void);  // wait for only a button press event.
 float getfloat(void);     // read a floating-point number from keypad
 void show_keys(void);     // demonstrate get_key_event()
 
-//===========================================================================
-// Bit Bang SPI LED Array
-//===========================================================================
-int msg_index = 0;
-uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700 };
-extern const char font[];
-
-//===========================================================================
-// Configure PB12 (CS), PB13 (SCK), and PB15 (SDI) for outputs
-//===========================================================================
-void setup_bb(void) {
-    RCC -> AHBENR |= RCC_AHBENR_GPIOBEN;
-    GPIOB -> MODER &= ~0xCF000000;
-    GPIOB -> MODER |= 0x45000000;
-    GPIOB -> BSRR |= GPIO_BSRR_BS_12;
-    GPIOB -> BRR |= GPIO_BRR_BR_13;
-}
-
-void small_delay(void) {
-    nano_wait(5000000);
-}
-
-//===========================================================================
-// Set the MOSI bit, then set the clock high and low.
-// Pause between doing these steps with small_delay().
-//===========================================================================
-void bb_write_bit(int val) {
-    // CS (PB12)
-    // SCK (PB13)
-    // SDI (PB15)
-    if (val == 0) {
-        GPIOB -> BRR |= GPIO_BRR_BR_15;
-    }
-    else {
-        GPIOB -> BSRR |= GPIO_BSRR_BS_15;
-    }
-    GPIOB -> BSRR |= GPIO_BSRR_BS_13;
-    small_delay();
-    GPIOB -> BRR |= GPIO_BRR_BR_13;
-    small_delay();
-
-}
-
-//===========================================================================
-// Set CS (PB12) low,
-// write 16 bits using bb_write_bit,
-// then set CS high.
-//===========================================================================
-void bb_write_halfword(int halfword) {
-    GPIOB -> BRR |= GPIO_BRR_BR_12;
-    for (int i = 15; i >= 0; i--) {
-        bb_write_bit((halfword >> i) & 1);
-    }
-    GPIOB -> BSRR |= GPIO_BSRR_BS_12;
-}
-
-//===========================================================================
-// Continually bitbang the msg[] array.
-//===========================================================================
-void drive_bb(void) {
-    for(;;)
-        for(int d=0; d<8; d++) {
-            bb_write_halfword(msg[d]);
-            nano_wait(1000000); // wait 1 ms between digits
-        }
-}
 
 //============================================================================
 // Configure Timer 15 for an update rate of 1 kHz.
@@ -158,22 +91,23 @@ void TIM7_IRQHandler() {
 
 
 //===========================================================================
-// Initialize the SPI2 peripheral.
+// Initialize the SPI1 peripheral.
 //===========================================================================
-void init_spi2(void) {
-    RCC -> APB1ENR |= RCC_APB1ENR_SPI2EN;
+void init_spi1(void) {
+    RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
     RCC -> AHBENR |= RCC_AHBENR_GPIOBEN;
-    GPIOB -> MODER &= ~0xCF000000;
-    GPIOB -> MODER |= 0x8A000000;
-    GPIOB -> AFR[1] &= ~(GPIO_AFRH_AFRH4_Msk | GPIO_AFRH_AFRH5_Msk | GPIO_AFRH_AFRH7_Msk);
-    SPI2 -> CR1 &= ~SPI_CR1_SPE;
-    SPI2 -> CR1 |= SPI_CR1_BR;
-    SPI2 -> CR2 |= SPI_CR2_DS;
-    SPI2 -> CR1 |= SPI_CR1_MSTR;
-    SPI2 -> CR2 |= SPI_CR2_SSOE;
-    SPI2 -> CR2 |= SPI_CR2_NSSP;
-    SPI2 -> CR2 |= SPI_CR2_TXDMAEN;
-    SPI2 -> CR1 |= SPI_CR1_SPE;
+    GPIOB -> MODER &= ~0x00000FC0;
+    GPIOB -> MODER |= 0x000000A80;
+    GPIOB -> AFR[0] &= ~0x00FFF000; //AF0 for 3,4,5
+    SPI1 -> CR1 &= ~SPI_CR1_SPE;
+    SPI1 -> CR1 |= SPI_CR1_BR; // high as possible?
+    SPI1 -> CR1 |= SPI_CR1_MSTR; // this or cr2_ssoe ?
+    SPI1 -> CR2 &= ~SPI_CR2_DS;
+    SPI1 -> CR2 |= (SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2) // 8-bit data size
+    SPI1 -> CR1 |= SPI_CR1_SSM;
+    SPI1 -> CR1 |= SPI_CR1_SSI;
+    SPI1 -> CR2 |= SPI_CR2_FRXTH_RXNE;
+    SPI1 -> CR1 |= SPI_CR1_SPE;
 }
 
 //===========================================================================
@@ -191,62 +125,12 @@ void spi2_setup_dma(void) {
     SPI2->CR2 |= 0x2;
 }
 
+
 //===========================================================================
 // Enable the DMA channel.
 //===========================================================================
 void spi2_enable_dma(void) {
     DMA1_Channel5 -> CCR |= DMA_CCR_EN;
-}
-
-//===========================================================================
-// 4.4 SPI OLED Display
-//===========================================================================
-void init_spi1() {
-    RCC -> AHBENR |= RCC_AHBENR_GPIOAEN;
-    GPIOA -> MODER &= ~(GPIO_MODER_MODER7 | GPIO_MODER_MODER5 | GPIO_MODER_MODER15);
-    GPIOA -> MODER |= 0x80008800;
-    GPIOA -> AFR[0] &= ~0xF0F00000;
-    GPIOA -> AFR[1] &= ~0xF0000000;
-
-    RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
-    SPI1 -> CR1 &= ~SPI_CR1_SPE;
-    SPI1 -> CR1 |= SPI_CR1_BR;
-
-    SPI1 -> CR2 |= (SPI_CR2_SSOE | SPI_CR2_NSSP | SPI_CR2_DS_0 | SPI_CR2_DS_3);
-    SPI1 -> CR2 &= ~(SPI_CR2_DS_1 | SPI_CR2_DS_2);
-    SPI1 -> CR1 |= SPI_CR1_MSTR;
-
-    SPI1 -> CR2 |= SPI_CR2_TXDMAEN;
-    SPI1 -> CR1 |= SPI_CR1_SPE;
-}
-void spi_cmd(unsigned int data) {
-    while(!(SPI1->SR & SPI_SR_TXE)) {} 
-    SPI1 -> DR = data;
-}
-void spi_data(unsigned int data) {
-    spi_cmd(data | 0x200);
-}
-void spi1_init_oled() {
-    nano_wait(1000000);
-    spi_cmd(0x38);
-    spi_cmd(0x08);
-    spi_cmd(0x01);
-    nano_wait(2000000);
-    spi_cmd(0x06);
-    spi_cmd(0x02);
-    spi_cmd(0x0c);
-}
-void spi1_display1(const char *string) {
-    spi_cmd(0x02);
-    for (int i = 0; string[i] == '\0'; i++) {
-        spi_data(string[i]);
-    }
-}
-void spi1_display2(const char *string) {
-    spi_cmd(0xc0);
-    for (int i = 0; string[i] == '\0'; i++) {
-        spi_data(string[i]);
-    }
 }
 
 //===========================================================================
