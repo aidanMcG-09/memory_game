@@ -7,12 +7,29 @@ void setup_tim17()
 {
     // Configure TIM17 to invoke the ISR 100 times per second.
     // Remember to set the NVIC ISER to allow the interrupt for TIM17.
+    RCC -> APB2ENR |= RCC_APB2ENR_TIM17EN;
+    TIM17 -> PSC = 4799;
+    TIM17 -> ARR = 99;
+    TIM17 -> DIER |= TIM_DIER_UIE;
+    NVIC -> ISER[0] |= 1 << TIM17_IRQn; //needed?
+    TIM17 -> CR1 |= TIM_CR1_CEN;
 }
 
 void setup_buttons()
 {
     // Enable Ports A and B.
     // Set PA0 and PB2 for input and enable pull-down resistors.
+    //enable gpio clks
+    RCC ->AHBENR |= RCC_AHBENR_GPIOAEN;
+    RCC ->AHBENR |= RCC_AHBENR_GPIOBEN;
+    //PA0 and PB2 as inputs (00)
+    GPIOA -> MODER &= ~(GPIO_MODER_MODER0);
+    GPIOB -> MODER &= ~(GPIO_MODER_MODER2);
+    //PD res (10)
+    GPIOA -> PUPDR |= GPIO_PUPDR_PUPDR0_1;
+    GPIOA -> PUPDR &= ~GPIO_PUPDR_PUPDR0_0;
+    GPIOB -> PUPDR |= GPIO_PUPDR_PUPDR2_1;
+    GPIOB -> PUPDR &= ~GPIO_PUPDR_PUPDR2_0;
 }
 
 char check_key()
@@ -20,6 +37,16 @@ char check_key()
     // If PB2 is pressed, return '*'
     // If PA0 is pressed, return 'D'
     // Otherwise, return 0
+    int32_t a_pressed = (GPIOA -> IDR) & 0b1;
+    int32_t b_pressed = ((GPIOB -> IDR) >> 2) & 0b1;
+
+    if (a_pressed) {
+        return '*';
+    }
+    else if (b_pressed) {
+        return 'D';
+    }
+    return 0;
 }
 
 // Copy a subset of a large source picture into a smaller destination.
