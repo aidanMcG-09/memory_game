@@ -207,56 +207,56 @@ int score = 0;
 char disp1[17] = "                ";
 char disp2[17] = "                ";
 volatile int pos = 0;
-void TIM17_IRQHandler(void)
-{
-    TIM17->SR &= ~TIM_SR_UIF;
-    memmove(disp1, &disp1[1], 16);
-    memmove(disp2, &disp2[1], 16);
-    if (pos == 0) {
-        if (disp1[0] != ' ')
-            score -= 1;
-        if (disp2[0] != ' ')
-            score += 1;
-        disp1[0] = '>';
-    } else {
-        if (disp2[0] != ' ')
-            score -= 1;
-        if (disp1[0] != ' ')
-            score += 1;
-        disp2[0] = '>';
-    }
-    int create = random() & 3;
-    if (create == 0) { // one in four chance
-        int line = random() & 1;
-        if (line == 0) { // pick a line
-            disp1[15] = 'x';
-            disp2[15] = ' ';
-        } else {
-            disp1[15] = ' ';
-            disp2[15] = 'x';
-        }
-    } else {
-        disp1[15] = ' ';
-        disp2[15] = ' ';
-    }
-    if (pos == 0)
-        disp1[0] = '>';
-    else
-        disp2[0] = '>';
-    if (score >= 100) {
-        print("Score100");
-        spi1_dma_display1("Game over");
-        spi1_dma_display2("You win");
-        NVIC->ICER[0] = 1<<TIM17_IRQn;
-        return;
-    }
-    char buf[9];
-    snprintf(buf, 9, "Score% 3d", score);
-    print(buf);
-    spi1_dma_display1(disp1);
-    spi1_dma_display2(disp2);
-    TIM17->ARR = 250 - 1 - 2*score;
-}
+// void TIM17_IRQHandler(void)
+// {
+//     TIM17->SR &= ~TIM_SR_UIF;
+//     memmove(disp1, &disp1[1], 16);
+//     memmove(disp2, &disp2[1], 16);
+//     if (pos == 0) {
+//         if (disp1[0] != ' ')
+//             score -= 1;
+//         if (disp2[0] != ' ')
+//             score += 1;
+//         disp1[0] = '>';
+//     } else {
+//         if (disp2[0] != ' ')
+//             score -= 1;
+//         if (disp1[0] != ' ')
+//             score += 1;
+//         disp2[0] = '>';
+//     }
+//     int create = random() & 3;
+//     if (create == 0) { // one in four chance
+//         int line = random() & 1;
+//         if (line == 0) { // pick a line
+//             disp1[15] = 'x';
+//             disp2[15] = ' ';
+//         } else {
+//             disp1[15] = ' ';
+//             disp2[15] = 'x';
+//         }
+//     } else {
+//         disp1[15] = ' ';
+//         disp2[15] = ' ';
+//     }
+//     if (pos == 0)
+//         disp1[0] = '>';
+//     else
+//         disp2[0] = '>';
+//     if (score >= 100) {
+//         print("Score100");
+//         spi1_dma_display1("Game over");
+//         spi1_dma_display2("You win");
+//         NVIC->ICER[0] = 1<<TIM17_IRQn;
+//         return;
+//     }
+//     char buf[9];
+//     snprintf(buf, 9, "Score% 3d", score);
+//     print(buf);
+//     spi1_dma_display1(disp1);
+//     spi1_dma_display2(disp2);
+//     TIM17->ARR = 250 - 1 - 2*score;
+// }
 
 void init_tim17(void)
 {
