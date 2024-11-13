@@ -2,99 +2,244 @@
   ******************************************************************************
   * @file    main.c
   * @author  Weili An, Niraj Menon
-  * @date    Feb 3, 2024
-  * @brief   ECE 362 Lab 6 Student template
+  * @date    Feb 7, 2024
+  * @brief   ECE 362 Lab 7 student template
   ******************************************************************************
 */
 
 /*******************************************************************************/
 
-// Fill out your username, otherwise your completion code will have the 
-// wrong username!
+// Fill out your username!  Even though we're not using an autotest, 
+// it should be a habit to fill out your username in this field now.
 const char* username = "amcgooga";
 
 /*******************************************************************************/ 
 
 #include "stm32f0xx.h"
+#include <stdint.h>
+#include "commands.h"
 
-void set_char_msg(int, char);
-void nano_wait(unsigned int);
-void game(void);
+#define STEP4
+
 void internal_clock();
-void check_wiring();
-void autotest();
 
-//===========================================================================
-// Configure GPIOC
-//===========================================================================
-void enable_ports(void) {
-    // Only enable port C for the keypad
-    RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-    GPIOC->MODER &= ~0xffff;
-    GPIOC->MODER |= 0x55 << (4*2);
-    GPIOC->OTYPER &= ~0xff;
-    GPIOC->OTYPER |= 0xf0;
-    GPIOC->PUPDR &= ~0xff;
-    GPIOC->PUPDR |= 0x55;
+// Uncomment only one of the following to test each step
+// #define STEP1
+// #define STEP2
+// #define STEP3
+// #define STEP4
+
+void init_usart5() {
+    // TODO
+    RCC -> AHBENR |= RCC_AHBENR_GPIOCEN;
+    RCC -> AHBENR |= RCC_AHBENR_GPIODEN;
+
+    GPIOC -> MODER &= ~GPIO_MODER_MODER12;
+    GPIOC -> MODER |= GPIO_MODER_MODER12_1;
+    GPIOC -> AFR[1] |= 0x00020000;
+
+    GPIOD -> MODER &= ~GPIO_MODER_MODER2;
+    GPIOD -> MODER |= GPIO_MODER_MODER2_1;
+    GPIOD -> AFR[0] |= 0x00000200;
+
+    RCC -> APB1ENR |= RCC_APB1ENR_USART5EN;
+    USART5 -> CR1 &= ~USART_CR1_UE;
+    USART5 -> CR1 &= ~USART_CR1_M0;
+    USART5 -> CR1 &= ~USART_CR1_M1;
+    USART5 -> CR2 &= ~USART_CR2_STOP;
+    USART5 -> CR1 &= ~USART_CR1_PCE;
+    USART5 -> CR1 &= ~USART_CR1_OVER8;
+    USART5 -> BRR = 0x1A1;
+    USART5 -> CR1 |= USART_CR1_TE;
+    USART5 -> CR1 |= USART_CR1_RE;
+    USART5 -> CR1 |= USART_CR1_UE;
+    while(!(USART5->ISR & USART_ISR_TEACK) && !(USART5->ISR & USART_ISR_REACK));
 }
 
-uint8_t col; // the column being scanned
+#ifdef STEP1
+int main(void){
+    internal_clock();
+    init_usart5();
+    for(;;) {
+        while (!(USART5->ISR & USART_ISR_RXNE)) { }
+        char c = USART5->RDR;
+        while(!(USART5->ISR & USART_ISR_TXE)) { }
+        USART5->TDR = c;
+    }
+}
+#endif
 
-void drive_column(int);   // energize one of the column outputs
-int  read_rows();         // read the four row inputs
-void update_history(int col, int rows); // record the buttons of the driven column
-char get_key_event(void); // wait for a button event (press or release)
-char get_keypress(void);  // wait for only a button press event.
-float getfloat(void);     // read a floating-point number from keypad
-void show_keys(void);     // demonstrate get_key_event()
+#ifdef STEP2
+#include <stdio.h>
 
+// TODO Resolve the echo and carriage-return problem
 
-//============================================================================
-// Configure Timer 15 for an update rate of 1 kHz.
-// Trigger the DMA channel on each update.
-// Copy this from lab 4 or lab 5.
-//============================================================================
-void init_tim15(void) {
-    RCC -> APB2ENR |= RCC_APB2ENR_TIM15EN;
-    TIM15 -> PSC = 479;
-    TIM15 -> ARR = 99;
-    TIM15 -> DIER |= TIM_DIER_UDE;
-    TIM15 -> CR1 |= TIM_CR1_CEN;
+int __io_putchar(int c) {
+    // TODO
+    if (c == '\n') {
+        while(!(USART5->ISR & USART_ISR_TXE));
+        USART5->TDR = '\r';
+    }
+    while(!(USART5->ISR & USART_ISR_TXE));
+    USART5->TDR = c;
+    
+    return c;
 }
 
-
-//===========================================================================
-// Configure timer 7 to invoke the update interrupt at 1kHz
-// Copy from lab 4 or 5.
-//===========================================================================
-void init_tim7(void) {
-    RCC -> APB1ENR |= RCC_APB1ENR_TIM7EN;
-    TIM7 -> PSC = 479;
-    TIM7 -> ARR = 99;
-    TIM7 -> DIER |= TIM_DIER_UIE;
-    NVIC -> ISER[0] |= 1 << TIM7_IRQn;
-    TIM7 -> CR1 |= TIM_CR1_CEN;
+int __io_getchar(void) {
+    while (!(USART5->ISR & USART_ISR_RXNE));
+    char c = USART5->RDR;
+    // TODO
+    if (c == '\r') {
+        c = '\n';
+    }
+    __io_putchar(c);
+    return c;
 }
 
+int main() {
+    internal_clock();
+    init_usart5();
+    setbuf(stdin,0);
+    setbuf(stdout,0);
+    setbuf(stderr,0);
+    printf("Enter your name: ");
+    char name[80];
+    fgets(name, 80, stdin);
+    printf("Your name is %s", name);
+    printf("Type any characters.\n");
+    for(;;) {
+        char c = getchar();
+        putchar(c);
+    }
+}
+#endif
 
-//===========================================================================
-// Copy the Timer 7 ISR from lab 5
-//===========================================================================
-// TODO To be copied
-void TIM7_IRQHandler() {
-    TIM7 -> SR &= ~TIM_SR_UIF;
-    int rows = read_rows();
-    update_history(col, rows);
-    col = (col + 1) & 3;
-    drive_column(col);
+#ifdef STEP3
+#include <stdio.h>
+#include "fifo.h"
+#include "tty.h"
+int __io_putchar(int c) {
+    // TODO Copy from your STEP2
+    if (c == '\n') {
+        while(!(USART5->ISR & USART_ISR_TXE));
+        USART5->TDR = '\r';
+    }
+    while(!(USART5->ISR & USART_ISR_TXE));
+    USART5->TDR = c;
+    
+    return c;
 }
 
-uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700 };
+int __io_getchar(void) {
+    // TODO
+    return line_buffer_getchar();
+}
 
-//===========================================================================
-// Initialize the SPI1 peripheral.
-//===========================================================================
-void init_spi1(void) {
+int main() {
+    internal_clock();
+    init_usart5();
+    setbuf(stdin,0);
+    setbuf(stdout,0);
+    setbuf(stderr,0);
+    printf("Enter your name: ");
+    char name[80];
+    fgets(name, 80, stdin);
+    printf("Your name is %s", name);
+    printf("Type any characters.\n");
+    for(;;) {
+        char c = getchar();
+        putchar(c);
+    }
+}
+#endif
+
+#ifdef STEP4
+
+#include <stdio.h>
+#include "fifo.h"
+#include "tty.h"
+
+// TODO DMA data structures
+#define FIFOSIZE 16
+char serfifo[FIFOSIZE];
+int seroffset = 0;
+
+void enable_tty_interrupt(void) {
+    // TODO
+    NVIC -> ISER[0] |= 1 << USART3_8_IRQn;
+    USART5 -> CR1 |= USART_CR1_RXNEIE;
+    USART5 -> CR3 |= USART_CR3_DMAR;
+
+    RCC->AHBENR |= RCC_AHBENR_DMA2EN;
+    DMA2->CSELR |= DMA2_CSELR_CH2_USART5_RX;
+    DMA2_Channel2->CCR &= ~DMA_CCR_EN;  // First make sure DMA is turned off
+    
+    // The DMA channel 2 configuration goes here
+    DMA2_Channel2 -> CMAR = &serfifo;
+    DMA2_Channel2 -> CPAR = &(USART5->RDR);
+    DMA2_Channel2 -> CNDTR = FIFOSIZE;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_DIR;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_TCIE;// total completion?
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_HTIE;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_PSIZE;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_MSIZE;
+    DMA2_Channel2 -> CCR |= DMA_CCR_MINC;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_PINC;
+    DMA2_Channel2 -> CCR |= DMA_CCR_CIRC;
+    DMA2_Channel2 -> CCR &= ~DMA_CCR_MEM2MEM;
+    DMA2_Channel2 -> CCR |= DMA_CCR_PL;
+    DMA2_Channel2->CCR |= DMA_CCR_EN;
+}
+
+// Works like line_buffer_getchar(), but does not check or clear ORE nor wait on new characters in USART
+char interrupt_getchar() {
+    // TODO
+    // USART_TypeDef *u = USART5;
+    // // If we missed reading some characters, clear the overrun flag.
+    // if (u->ISR & USART_ISR_ORE)
+    //     u->ICR |= USART_ICR_ORECF;
+    // Wait for a newline to complete the buffer.
+    while(fifo_newline(&input_fifo) == 0) {
+        // while (!(u->ISR & USART_ISR_RXNE))
+        //     ;
+        // insert_echo_char(u->RDR);
+        asm volatile ("wfi"); // wait for an interrupt
+    }
+    // Return a character from the line buffer.
+    char ch = fifo_remove(&input_fifo);
+    return ch;
+}
+
+int __io_putchar(int c) {
+    // TODO copy from STEP2
+    if (c == '\n') {
+        while(!(USART5->ISR & USART_ISR_TXE));
+        USART5->TDR = '\r';
+    }
+    while(!(USART5->ISR & USART_ISR_TXE));
+    USART5->TDR = c;
+    
+    return c;
+}
+
+int __io_getchar(void) {
+    // TODO Use interrupt_getchar() instead of line_buffer_getchar()
+    return interrupt_getchar();
+}
+
+// TODO Copy the content for the USART5 ISR here
+// TODO Remember to look up for the proper name of the ISR function
+void USART3_8_IRQHandler(void) {
+    while(DMA2_Channel2->CNDTR != sizeof serfifo - seroffset) {
+        if (!fifo_full(&input_fifo))
+            insert_echo_char(serfifo[seroffset]);
+        seroffset = (seroffset + 1) % sizeof serfifo;
+    }
+}
+
+// tft funcs
+void init_spi1_slow(void) {
     RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
     RCC -> AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB -> MODER &= ~0x00000FC0;
@@ -103,6 +248,7 @@ void init_spi1(void) {
     SPI1 -> CR1 &= ~SPI_CR1_SPE;
     SPI1 -> CR1 |= SPI_CR1_BR; // high as possible?
     SPI1 -> CR1 |= SPI_CR1_MSTR; // this or cr2_ssoe ?
+    SPI1 -> CR2 |= SPI_CR2_SSOE;
     SPI1 -> CR2 &= ~SPI_CR2_DS;
     SPI1 -> CR2 |= (SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2); // 8-bit data size
     SPI1 -> CR1 |= SPI_CR1_SSM;
@@ -111,48 +257,21 @@ void init_spi1(void) {
     SPI1 -> CR1 |= SPI_CR1_SPE;
 }
 
-//===========================================================================
-// Configure the SPI2 peripheral to trigger the DMA channel when the
-// transmitter is empty.  Use the code from setup_dma from lab 5.
-//===========================================================================
-// void spi2_setup_dma(void) {
-//     RCC -> AHBENR |= RCC_AHBENR_DMA1EN;
-//     ADC1->CFGR1|=ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
-//     DMA1_Channel5 -> CCR &= ~DMA_CCR_EN;
-//     DMA1_Channel5 -> CMAR = (uint32_t)(msg);
-//     DMA1_Channel5 -> CPAR = (uint32_t)(&SPI2->DR);
-//     DMA1_Channel5->CNDTR = 8;
-//     DMA1_Channel5 -> CCR |= DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_CIRC;
-//     SPI2->CR2 |= 0x2;
-// }
-
-
-//===========================================================================
-// Enable the DMA channel.
-//===========================================================================
-// void spi2_enable_dma(void) {
-//     DMA1_Channel5 -> CCR |= DMA_CCR_EN;
-// }
-
-
-//===========================================================================
-// Initialize the SPI1 for TFT DISPLAY
-//===========================================================================
 void enable_sdcard()
 {
     //set PB2 to low
-    GPIOB -> ODR = (0 << 2);
+    GPIOB -> ODR &= ~(1 << 2);
   
 }
 void disable_sdcard()
 {
     //set PB2 high
-    GPIOB -> ODR = (1 << 2);
+    GPIOB -> ODR |= (1 << 2);
 
 }
 void init_sdcard_io()
 {
-    init_spi1();
+    init_spi1_slow();
     //configure PB2 as output
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB -> MODER |= (GPIO_MODER_MODER2_0);
@@ -162,12 +281,12 @@ void init_sdcard_io()
 
 void sdcard_io_high_speed()
 {
-    //disable SPI1 channel
-    RCC -> APB2ENR &= ~RCC_APB2ENR_SPI1EN;
-    //set SP1 BR
+    //set SP1 B
+    SPI1 -> CR1 &= ~SPI_CR1_SPE;
+    SPI1 -> CR1 &= ~SPI_CR1_BR;
     SPI1 -> CR1 |= SPI_CR1_BR_0;
-    //renable SPI1
-    RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
+    SPI1 -> CR1 |= SPI_CR1_SPE;
+
 }
 
 void init_lcd_spi(){
@@ -176,109 +295,38 @@ void init_lcd_spi(){
     GPIOB -> MODER |= (GPIO_MODER_MODER8_0 | GPIO_MODER_MODER11_0 | GPIO_MODER_MODER14_0);
     GPIOB -> MODER &= ~(GPIO_MODER_MODER8_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER14_1);
     //call init_spi_slow
-    init_spi1();
+    init_spi1_slow();
     //call sdcard_io_high_speed
     sdcard_io_high_speed();
 }
+// ------------------------------------------
 
-//===========================================================================
-// This is the 34-entry buffer to be copied into SPI1.
-// Each element is a 16-bit value that is either character data or a command.
-// Element 0 is the command to set the cursor to the first position of line 1.
-// The next 16 elements are 16 characters.
-// Element 17 is the command to set the cursor to the first position of line 2.
-//===========================================================================
-uint16_t display[34] = {
-        0x002, // Command to set the cursor at the first position line 1
-        0x200+'E', 0x200+'C', 0x200+'E', 0x200+'3', 0x200+'6', + 0x200+'2', 0x200+' ', 0x200+'i',
-        0x200+'s', 0x200+' ', 0x200+'t', 0x200+'h', + 0x200+'e', 0x200+' ', 0x200+' ', 0x200+' ',
-        0x0c0, // Command to set the cursor at the first position line 2
-        0x200+'c', 0x200+'l', 0x200+'a', 0x200+'s', 0x200+'s', + 0x200+' ', 0x200+'f', 0x200+'o',
-        0x200+'r', 0x200+' ', 0x200+'y', 0x200+'o', + 0x200+'u', 0x200+'!', 0x200+' ', 0x200+' ',
-};
-
-//===========================================================================
-// Configure the proper DMA channel to be triggered by SPI1_TX.
-// Set the SPI1 peripheral to trigger a DMA when the transmitter is empty.
-//===========================================================================
-void spi1_setup_dma(void) {
-    RCC -> AHBENR |= RCC_AHBENR_DMA1EN;
-    ADC1->CFGR1|=ADC_CFGR1_DMAEN | ADC_CFGR1_DMACFG;
-    DMA1_Channel3 -> CCR &= ~DMA_CCR_EN;
-    DMA1_Channel3 -> CMAR = (uint32_t)(display);
-    DMA1_Channel3 -> CPAR = (uint32_t)&(SPI1->DR);
-    DMA1_Channel3 -> CNDTR = 34;
-    DMA1_Channel3 -> CCR |= DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_MSIZE_0 | DMA_CCR_PSIZE_0 | DMA_CCR_CIRC;
-    SPI1->CR2 |= 0x2;
-    SPI1->CR2 |= SPI_CR2_TXDMAEN;
-}
-
-//===========================================================================
-// Enable the DMA channel triggered by SPI1_TX.
-//===========================================================================
-void spi1_enable_dma(void) {
-    DMA1_Channel3 -> CCR |= DMA_CCR_EN;
-}
-
-//===========================================================================
-// Main function
-//===========================================================================
-
-int main(void) {
+int main() {
     internal_clock();
+    init_usart5();
+    enable_tty_interrupt();
 
-    // GPIO enable
-    enable_ports();
-    // setup keyboard
-    init_tim7();
+    setbuf(stdin,0); // These turn off buffering; more efficient, but makes it hard to explain why first 1023 characters not dispalyed
+    setbuf(stdout,0);
+    setbuf(stderr,0);
+    // printf("Enter your name: "); // Types name but shouldn't echo the characters; USE CTRL-J to finish
+    // char name[80];
+    // fgets(name, 80, stdin);
+    // printf("Your name is %s", name);
+    // printf("Type any characters.\n"); // After, will type TWO instead of ONE
+    // for(;;) {
+    //     char c = getchar();
+    //     putchar(c);
+    // }
 
-    // Direct SPI peripheral to drive LED display
-// #define SPI_LEDS
-#if defined(SPI_LEDS)
-    init_spi2();
-    spi2_setup_dma();
-    spi2_enable_dma();
-    init_tim15();
-    show_keys();
-#endif
-
-    // LED array SPI
-// #define SPI_LEDS_DMA
-#if defined(SPI_LEDS_DMA)
-    init_spi2();
-    spi2_setup_dma();
-    spi2_enable_dma();
-    show_keys();
-#endif
-
-    // SPI OLED direct drive
-//#define SPI_OLED
-#if defined(SPI_OLED)
-    init_spi1();
-    spi1_init_oled();
-    spi1_display1("Hello again,");
-    spi1_display2(username);
-#endif
-
-    // SPI
-//#define SPI_OLED_DMA
-#if defined(SPI_OLED_DMA)
-    init_spi1();
-    spi1_init_oled();
-    spi1_setup_dma();
-    spi1_enable_dma();
-#endif
-
-    init_spi1();
+    init_spi1_slow();
     enable_sdcard();
     disable_sdcard();
     init_sdcard_io();
     sdcard_io_high_speed();
     init_lcd_spi();
 
-    // Uncomment when you are ready to generate a code.
-    // autotest();
+    command_shell();
 
-    // Game on!  The goal is to score 100 points.
-    //game();
 }
+#endif
