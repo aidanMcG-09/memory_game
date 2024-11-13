@@ -18,6 +18,17 @@ const char* username = "amcgooga";
 #include "stm32f0xx.h"
 #include <stdint.h>
 #include "commands.h"
+#include "lcd.h"
+#include "keypad.h"
+#include "score.h"
+
+void nano_wait(unsigned int n);
+
+void micro_wait(unsigned int n) {
+    for (int i = 0; i < n; i++) {
+        nano_wait(1000);
+    }
+}
 
 #define STEP4
 
@@ -238,7 +249,7 @@ void USART3_8_IRQHandler(void) {
     }
 }
 
-// tft funcs
+// tft funcs __________________________________________________________________________________________________
 void init_spi1_slow(void) {
     RCC -> APB2ENR |= RCC_APB2ENR_SPI1EN;
     RCC -> AHBENR |= RCC_AHBENR_GPIOBEN;
@@ -299,7 +310,91 @@ void init_lcd_spi(){
     //call sdcard_io_high_speed
     sdcard_io_high_speed();
 }
-// ------------------------------------------
+// __________________________________________________________________________________________________________________________
+// Game logic
+// __________________________________________________________________________________________________________________________
+
+char flash_string[] = "hello";  // Buffer to hold the string that will be flashed
+char user_input[10];    // Buffer to store user input for comparison
+
+// Function to display the flash string for a limited time
+void flash_string_on_screen(int duration) {
+    LCD_Clear(0xffff);
+    LCD_DrawString(10, 10, 0x0000, 0xffff, flash_string, 16, 1);
+    micro_wait(duration);  // Wait for the specified duration (in milliseconds)
+    LCD_Clear(0xffff);  // Clear the screen after flashing
+}
+
+// // Function to get user input and compare with flashed string
+// int get_and_check_user_input(int length) {
+//     for (int i = 0; i < length; i++) {
+//         user_input[i] = get_keypress();
+//         // Display the current user input (optional visual feedback)
+//         tft_draw_text(10, 30 + i * 10, user_input);
+//     }
+//     user_input[length] = '\0';  // Null-terminate the string
+
+//     // Compare the user input with the flash string
+//     if (strcmp(flash_string, user_input) == 0) {
+//         return 1;  // Correct input
+//     } else {
+//         return 0;  // Incorrect input
+//     }
+// }
+
+
+// // Display Game Instructions
+// void display_instructions(void) {
+//     tft_clear();
+//     tft_draw_text(10, 10, "Game Instructions:");
+//     tft_draw_text(10, 30, "Press A to Start");
+//     tft_draw_text(10, 50, "Move Left: 4");
+//     tft_draw_text(10, 70, "Move Right: 7");
+//     tft_draw_text(10, 90, "Pause: *");
+//     tft_draw_text(10, 110, "Quit: #");
+//     nano_wait(5000);  // Wait for 5 seconds before starting the game
+// }
+
+// void game(void) {
+//     tft_init();  // Initialize TFT
+//     tft_clear();  // Clear the screen
+
+//     // Start the game when 'A' is pressed
+//     while (1) {
+//         char key = get_keypress();
+//         if (key == 'A') {
+//             // Game start logic
+//             score = 0;  // Reset score
+//             int level = 4;  // Starting string length
+//             while (1) {
+//                 generate_flash_string(level); 
+//                 flash_string_on_screen(flash_duration);  // Flash the string
+
+//                 // Get user input and check if it's correct
+//                 if (get_and_check_user_input(level)) {
+// 		    if(level == 10){
+// 			;
+// 	            }
+// 		    else{
+// 		      level++;	
+//                     }
+                    
+// 		    score++;
+//                     snprintf(user_input, sizeof(user_input), "Score: %d", score);
+//                     tft_draw_text(10, 100, user_input);  // Display current score
+//                 } else {
+//                     tft_draw_text(10, 100, "Game Over!");  // Game over
+//                     break;
+//                 }
+
+//                 nano_wait(2000);  // Wait before next round
+//             }
+//         }
+//     }
+// }
+
+// __________________________________________________________________________________________________________________________
+
 
 int main() {
     internal_clock();
@@ -326,7 +421,15 @@ int main() {
     sdcard_io_high_speed();
     init_lcd_spi();
 
-    command_shell();
+    //command_shell();
+
+    LCD_Setup();
+    mount_sd();
+    save_score(65);
+
+    flash_string_on_screen(5000000);
+
+    printf("SCORE: %d\n", get_score());
 
 }
 #endif
