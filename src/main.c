@@ -22,6 +22,7 @@ const char* username = "amcgooga";
 #include "keypad.h"
 #include "score.h"
 #include <string.h>
+#include <stdio.h>
 
 void nano_wait(unsigned int n);
 
@@ -325,19 +326,36 @@ void flash_string_on_screen(int duration, const char *flash_string) {
     LCD_Clear(0xffff);  // Clear the screen after flashing
 }
 
-uint8_t col;
+uint8_t col          = 0;
+int position = 0;
+char user_answer[5];
+int cursor_x = 10;
+int cursor_y = 10;
+
+void print_on_lcd(char);
+void check_answer(void);
 
 void TIM7_IRQHandler() {
-    TIM7 -> SR &= ~TIM_SR_UIF;
-    int rows = read_rows();
-    update_history(col, rows);
-    col = (col + 1) & 3;
-    drive_column(col);
+  TIM7 -> SR &= ~TIM_SR_UIF;
+  int rows = read_rows();
+  if (rows != 0) {
+    char key = rows_to_key(rows);
+    printf("%c\n", key);
+    print_on_lcd(key);
+  }
+
+//   char c = disp[col];
+//   show_char(col, c);
+  col++;
+  if (col > 7) {
+    col = 0;
+  }
+  drive_column(col);
 }
 
-void init_tim7(void) {
+void setup_tim7() {
     RCC -> APB1ENR |= RCC_APB1ENR_TIM7EN;
-    TIM7 -> PSC = 479;
+    TIM7 -> PSC = 48000 - 1;
     TIM7 -> ARR = 99;
     TIM7 -> DIER |= TIM_DIER_UIE;
     NVIC -> ISER[0] |= 1 << TIM7_IRQn;
@@ -346,78 +364,96 @@ void init_tim7(void) {
 
 #define MAX_INPUT_LENGTH 100
 #define TIME_LIMIT 10000000
+char answer[] = "12345";
 
-char *collect_user_input(void) {
-    static char input_string[MAX_INPUT_LENGTH + 1];  // +1 for null-terminator
-    int cursor_x = 10;  // Starting X position for displaying the character
-    int cursor_y = 10;  // Starting Y position for displaying the character
-    int char_index = 0;
-    
-    // Initialize the input string as empty
-    input_string[0] = '\0';
+void print_on_lcd(char key) {
+    user_input[position] = key;
+    position++;
+    LCD_DrawChar(cursor_x, cursor_y, 0x0000, 0xFFFF, key, 16, 1);
+    cursor_x += 16;
+    if (position == 5) {
+        LCD_Clear(0xffff);
+        check_answer();
+        position = 0;
+        cursor_x = 0;
+        user_answer[0] = '\n';
+    }
+}
 
-    // Get the start time for the 10 second limit
-    int start_time = 0;  // This is an approximation, micro_wait increments global time
-    int current_time = 0;
-
-    while (1) {
-        // Capture the current time to check elapsed time
-        start_time = current_time;
-
-        // Wait a small amount (for example, 10 ms) to simulate the loop
-        micro_wait(10000);  // 10ms interval between each loop iteration (can be adjusted for responsiveness)
-
-        // Update the current time after waiting
-        current_time += 10000;  // Increment time by 10ms (this is in microseconds)
-
-        // Exit the loop after 10 seconds
-        if (current_time - start_time >= TIME_LIMIT) {
-            break;  // Exit the loop after 10 seconds
-        }
-
-        // Get the next key press
-        char key = get_keypress();
-
-        // If the user presses 'Enter' (or a specific "done" key), break the loop
-        if (key == '*') {
-            break;  // Exit the loop when Enter is pressed
-        }
-
-        // If the user presses 'Backspace' (or another key to delete last character)
-        if (key == 'D' && char_index > 0) {
-            // Remove the last character from the input string
-            char_index--;
-            input_string[char_index] = '\0';
-
-            // Clear the last character on the LCD by overwriting it with space or blank
-            LCD_DrawChar(cursor_x - 16, cursor_y, 0xFFFF, 0xFFFF, ' ', 16, 1);  // Adjust based on character size
-            cursor_x -= 16;  // Move the cursor back for backspace
-            continue;
-        }
-
-        // If the key is valid (printable ASCII characters)
-        if (key >= 32 && key <= 126) {  // Printable ASCII characters range
-            input_string[char_index] = key;
-            input_string[char_index + 1] = '\0';  // Null-terminate the string
-
-            // Display the character on the LCD
-            LCD_DrawChar(cursor_x, cursor_y, 0x0000, 0xFFFF, key, 16, 1);
-
-            // Update cursor position for next character
-            cursor_x += 16;  // Move cursor to the right after displaying each char
-            
-            // Increment index for the next character in the string
-            char_index++;
-
-            // Ensure we don't exceed the max input length
-            if (char_index >= MAX_INPUT_LENGTH) {
-                break;  // Stop accepting input if max length reached
-            }
+void check_answer(void) {
+    int check  = 1;
+    // for (int i = 0; i < strlen(user_answer); i++) {
+    //     printf("%c", user_answer[i]);
+    // }
+    for (int i = 0; i < 5; i++) {
+        if (answer[i] != user_answer[i]) {
+            check = 0;
+            break;
         }
     }
-
-    return input_string;  // Return the collected input string
+    if (check) {
+        flash_string_on_screen(1000000,"Correct!");
+    }
+    else {
+        flash_string_on_screen(1000000, "Wrong!");
+    }
 }
+
+// void print_user_input(void) {
+//     int cursor_x = 10;  // Starting X position for displaying the character
+//     int cursor_y = 10;  // Starting Y position for displaying the character
+//     int current_time = 0;
+    
+//     // Get the start time for the 10-second limit
+//     int start_time = 0;
+    
+//     // Start the input loop
+//     while (1) {
+//         // Capture the current time to check elapsed time
+//         start_time = current_time;
+
+//         // Wait a small amount (for example, 10 ms) to simulate the loop
+//         micro_wait(10000);  // 10ms interval between each loop iteration
+
+//         // Update the current time after waiting
+//         current_time += 10000;  // Increment time by 10ms (this is in microseconds)
+
+//         // Exit the loop after the time limit is reached
+//         if (current_time - start_time >= TIME_LIMIT) {
+//             break;  // Exit the loop after 10 seconds
+//         }
+
+//         // Get the next key press
+//         char key = get_keypress();
+
+//         // If the user presses 'Enter' (or a specific "done" key), break the loop
+//         if (key == '*') {
+//             break;  // Exit the loop when Enter is pressed
+//         }
+
+//         // If the user presses 'Backspace' (or another key to delete the last character)
+//         if (key == 'D' && cursor_x > 10) {
+//             // Remove the last character from the LCD display
+//             cursor_x -= 16;  // Move the cursor back for backspace
+//             LCD_DrawChar(cursor_x, cursor_y, 0xFFFF, 0xFFFF, ' ', 16, 1);  // Overwrite with space
+//             continue;
+//         }
+
+//         // If the key is valid (printable ASCII characters)
+//         if (key >= 32 && key <= 126) {  // Printable ASCII characters range
+//             // Display the character on the LCD
+//             LCD_DrawChar(cursor_x, cursor_y, 0x0000, 0xFFFF, key, 16, 1);
+
+//             // Update cursor position for next character
+//             cursor_x += 16;  // Move cursor to the right after displaying each char
+
+//             // Ensure we don't exceed the max input length
+//             if (cursor_x - 10 >= MAX_INPUT_LENGTH * 16) {
+//                 break;  // Stop accepting input if max length reached
+//             }
+//         }
+//     }
+// }
 // // Function to get user input and compare with flashed string
 // int get_and_check_user_input(int length) {
 //     for (int i = 0; i < length; i++) {
@@ -491,8 +527,10 @@ char *collect_user_input(void) {
 
 int main() {
     internal_clock();
+    enable_ports();
     init_usart5();
     enable_tty_interrupt();
+    setup_tim7();
 
     setbuf(stdin,0); // These turn off buffering; more efficient, but makes it hard to explain why first 1023 characters not dispalyed
     setbuf(stdout,0);
@@ -522,16 +560,20 @@ int main() {
 
     flash_string_on_screen(1000000, "Memory Game Starting...");
     flash_string_on_screen(1000000, "Type in this string!");
-    char answer[] = "12345";
-    flash_string_on_screen(1000000, answer);
-    init_tim7();
-    char *user_input = collect_user_input();
-    LCD_Clear(0xffff);
-    if (user_input == answer) {
-        flash_string_on_screen(1000000, "Correct!");
-    }
     
-    printf("SCORE: %d\n", get_score());
+    flash_string_on_screen(1000000, answer);
+    // while(1) {
+    //     char key = get_keypress();
+    //     printf("%c\n", key);
+    // }
+    
+    // char *user_input = collect_user_input();
+    // LCD_Clear(0xffff);
+    // if (user_input == answer) {
+    //     flash_string_on_screen(1000000, "Correct!");
+    // }
+    
+    // printf("SCORE: %d\n", get_score());
 
 }
 #endif

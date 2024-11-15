@@ -1,14 +1,15 @@
 #ifndef KEYPAD_H
 #define KEYPAD_H
 
-void push_queue(int n);
+extern uint8_t col;
 
-char pop_queue();
 
-void update_history(int c, int rows);
+
+void enable_ports();
 void drive_column(int c);
 int read_rows();
-char get_key_event(void);
+char rows_to_key(int rows);
+void setup_tim7();
 
 char get_keypress();
 

@@ -1,6 +1,7 @@
 #include "stm32f0xx.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "keypad.h"
 
 uint8_t hist[16];
@@ -8,70 +9,53 @@ char queue[2];  // A two-entry queue of button press/release events.
 int qin;        // Which queue entry is next for input
 int qout;       // Which queue entry is next for output
 
-const char keymap[] = "DCBA#9630852*741";
+// const char keymap[] = "DCBA#9630852*741";
 
-void push_queue(int n) {
-    queue[qin] = n;
-    qin ^= 1;
+
+char disp[9]         = "Hello...";
+uint8_t mode         = 'A';
+uint8_t thrust       = 0;
+extern char *keymap;
+extern char disp[9];
+extern uint8_t mode;
+char* keymap_arr = &keymap;
+
+void enable_ports() {
+    RCC -> AHBENR |= RCC_AHBENR_GPIOCEN; // Enables the RCC clock to GPIOB and GPIOC
+
+    GPIOC -> MODER &= ~0x0000FF00; // PC4 – PC7 to be outputs
+    GPIOC -> MODER |= 0x00005500;
+
+    GPIOC -> PUPDR &= ~0x000000FF; // PC0 – PC3 to be inputs
+    GPIOC -> PUPDR |= 0x000000AA; // PC0 – PC3 to be internally pulled low
 }
 
-char pop_queue() {
-    char tmp = queue[qout];
-    queue[qout] = 0;
-    qout ^= 1;
-    return tmp;
+void drive_column(int c) {
+    c = c & 3;
+    GPIOC -> BRR |= 0xF << 4; // turn off
+    GPIOC -> BSRR |= 1 << (c + 4); // turn on
 }
 
-void update_history(int c, int rows)
-{
-    // We used to make students do this in assembly language.
-    for(int i = 0; i < 4; i++) {
-        hist[4*c+i] = (hist[4*c+i]<<1) + ((rows>>i)&1);
-        if (hist[4*c+i] == 0x01)
-            push_queue(0x80 | keymap[4*c+i]);
-        if (hist[4*c+i] == 0xfe)
-            push_queue(keymap[4*c+i]);
+int read_rows() {
+    return (GPIOC -> IDR) & 0xF;
+}
+
+char rows_to_key(int rows) {
+    col = col & 3;
+    int row = 0;
+    if (rows & 0b1) {
+      row = 0;
     }
-}
-
-void drive_column(int c)
-{
-    GPIOC->BSRR = 0xf00000 | ~(1 << (c + 4));
-}
-
-int read_rows()
-{
-    return (~GPIOC->IDR) & 0xf;
-}
-
-char get_key_event(void) {
-    for(;;) {
-        asm volatile ("wfi");   // wait for an interrupt
-        if (queue[qout] != 0)
-            break;
+    else if (rows & 0b10) {
+      row = 1;
     }
-    return pop_queue();
-}
-
-char get_keypress() {
-    char event;
-    for(;;) {
-        // Wait for every button event...
-        event = get_key_event();
-        // ...but ignore if it's a release.
-        if (event & 0x80)
-            break;
+    else if (rows & 0b100) {
+      row = 2;
     }
-    return event & 0x7f;
-}
-
-void show_keys(void)
-{
-    char buf[] = "        ";
-    for(;;) {
-        char event = get_key_event();
-        memmove(buf, &buf[1], 7);
-        buf[7] = event;
-        print(buf);
+    else if (rows & 0b1000) {
+      row = 3;
     }
+    int offset = col * 4 + row;
+    char c = keymap_arr[offset];
+    return c;
 }
