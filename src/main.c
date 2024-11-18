@@ -15,14 +15,17 @@ const char* username = "amcgooga";
 
 /*******************************************************************************/ 
 
-#include "stm32f0xx.h"
+#include <string.h>
+#include <stdio.h>
 #include <stdint.h>
+
+#include "stm32f0xx.h"
 #include "commands.h"
 #include "lcd.h"
 #include "keypad.h"
 #include "score.h"
-#include <string.h>
-#include <stdio.h>
+#include "fifo.h"
+#include "tty.h"
 
 void nano_wait(unsigned int n);
 
@@ -32,15 +35,7 @@ void micro_wait(unsigned int n) {
     }
 }
 
-#define STEP4
-
 void internal_clock();
-
-// Uncomment only one of the following to test each step
-// #define STEP1
-// #define STEP2
-// #define STEP3
-// #define STEP4
 
 void init_usart5() {
     // TODO
@@ -68,110 +63,6 @@ void init_usart5() {
     USART5 -> CR1 |= USART_CR1_UE;
     while(!(USART5->ISR & USART_ISR_TEACK) && !(USART5->ISR & USART_ISR_REACK));
 }
-
-#ifdef STEP1
-int main(void){
-    internal_clock();
-    init_usart5();
-    for(;;) {
-        while (!(USART5->ISR & USART_ISR_RXNE)) { }
-        char c = USART5->RDR;
-        while(!(USART5->ISR & USART_ISR_TXE)) { }
-        USART5->TDR = c;
-    }
-}
-#endif
-
-#ifdef STEP2
-#include <stdio.h>
-
-// TODO Resolve the echo and carriage-return problem
-
-int __io_putchar(int c) {
-    // TODO
-    if (c == '\n') {
-        while(!(USART5->ISR & USART_ISR_TXE));
-        USART5->TDR = '\r';
-    }
-    while(!(USART5->ISR & USART_ISR_TXE));
-    USART5->TDR = c;
-    
-    return c;
-}
-
-int __io_getchar(void) {
-    while (!(USART5->ISR & USART_ISR_RXNE));
-    char c = USART5->RDR;
-    // TODO
-    if (c == '\r') {
-        c = '\n';
-    }
-    __io_putchar(c);
-    return c;
-}
-
-int main() {
-    internal_clock();
-    init_usart5();
-    setbuf(stdin,0);
-    setbuf(stdout,0);
-    setbuf(stderr,0);
-    printf("Enter your name: ");
-    char name[80];
-    fgets(name, 80, stdin);
-    printf("Your name is %s", name);
-    printf("Type any characters.\n");
-    for(;;) {
-        char c = getchar();
-        putchar(c);
-    }
-}
-#endif
-
-#ifdef STEP3
-#include <stdio.h>
-#include "fifo.h"
-#include "tty.h"
-int __io_putchar(int c) {
-    // TODO Copy from your STEP2
-    if (c == '\n') {
-        while(!(USART5->ISR & USART_ISR_TXE));
-        USART5->TDR = '\r';
-    }
-    while(!(USART5->ISR & USART_ISR_TXE));
-    USART5->TDR = c;
-    
-    return c;
-}
-
-int __io_getchar(void) {
-    // TODO
-    return line_buffer_getchar();
-}
-
-int main() {
-    internal_clock();
-    init_usart5();
-    setbuf(stdin,0);
-    setbuf(stdout,0);
-    setbuf(stderr,0);
-    printf("Enter your name: ");
-    char name[80];
-    fgets(name, 80, stdin);
-    printf("Your name is %s", name);
-    printf("Type any characters.\n");
-    for(;;) {
-        char c = getchar();
-        putchar(c);
-    }
-}
-#endif
-
-#ifdef STEP4
-
-#include <stdio.h>
-#include "fifo.h"
-#include "tty.h"
 
 // TODO DMA data structures
 #define FIFOSIZE 16
@@ -535,15 +426,6 @@ int main() {
     setbuf(stdin,0); // These turn off buffering; more efficient, but makes it hard to explain why first 1023 characters not dispalyed
     setbuf(stdout,0);
     setbuf(stderr,0);
-    // printf("Enter your name: "); // Types name but shouldn't echo the characters; USE CTRL-J to finish
-    // char name[80];
-    // fgets(name, 80, stdin);
-    // printf("Your name is %s", name);
-    // printf("Type any characters.\n"); // After, will type TWO instead of ONE
-    // for(;;) {
-    //     char c = getchar();
-    //     putchar(c);
-    // }
 
     init_spi1_slow();
     enable_sdcard();
@@ -576,4 +458,3 @@ int main() {
     // printf("SCORE: %d\n", get_score());
 
 }
-#endif
