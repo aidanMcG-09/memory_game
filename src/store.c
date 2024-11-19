@@ -56,13 +56,13 @@ struct store get_store() {
     return storage;
 }
 
-void save_score(int highscore) {
+void save_highscore(int highscore) {
     current_storage = get_store();
     current_storage.highscore = highscore;
     save_store(current_storage);
 }
 
-int get_score() {
+int get_highscore() {
     current_storage = get_store();
     return current_storage.highscore;
 }

@@ -213,16 +213,16 @@ char user_input[10];    // Buffer to store user input for comparison
 // Function to display the flash string for a limited time
 void flash_string_on_screen(int duration, const char *flash_string) {
     LCD_Clear(0xffff);
-    LCD_DrawString(10, 10, 0x0000, 0xffff, flash_string, 16, 1);
+    LCD_DrawString(10, 10, 0, 0xFFFF, flash_string, 16, 0);
     micro_wait(duration);
     LCD_Clear(0xffff);
 }
 
-char keys[] = "123456789ABCD*#";
+char keys[] = "123456789ABCD*";
 
 uint8_t col          = 0;
 int position = 0;
-char user_answer[5];
+char user_answer[11];
 int cursor_x = 10;
 int cursor_y = 10;
 int level = 1;
@@ -231,6 +231,7 @@ int userin_flag = 0;
 int lives = 3;
 int highscore = 0;
 int seed = 0;
+int length = 3;
 
 void print_on_lcd(char);
 void check_answer(void);
@@ -275,9 +276,9 @@ char answer[] = "12345";
 void print_on_lcd(char key) {
     user_input[position] = key;
     position++;
-    LCD_DrawChar(cursor_x, cursor_y, 0x0000, 0xFFFF, key, 16, 1);
+    LCD_DrawChar(cursor_x, cursor_y, 0, 0xFFFF, key, 16, 0);
     cursor_x += 16;
-    if (position == 5) {
+    if (key == '#') {
         LCD_Clear(0xffff);
         check_answer();
         position = 0;
@@ -288,12 +289,12 @@ void print_on_lcd(char key) {
 
 void check_answer(void) {
     int check  = 1;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < length; i++) {
         printf("%c", user_answer[i]);
     }
     printf("\n");
-    for (int i = 0; i < 5; i++) {
-        if (answer[i] != user_answer[i]) {
+    for (int i = 0; i < length; i++) {
+        if (answer[i] != user_answer[i] || position == 10) {
             check = 0;
             break;
         }
@@ -301,6 +302,10 @@ void check_answer(void) {
     if (check) {
         flash_string_on_screen(1000000,"Correct!");
         level++;
+        length++;
+        if(length > 10) {
+            length = 10;
+        }
         delay -= 500000;
         if(delay < 500000) delay = 500000;
         printf("LEVEL: %d\n", level);
@@ -319,7 +324,36 @@ void check_answer(void) {
 }
 
 void game_over() {
-    flash_string_on_screen(10000000, "GAME OVER!");
+    if(level > highscore) {
+        highscore = level;
+        save_highscore(highscore);
+    }
+    
+    seed += 30;
+    save_seed(seed);
+
+    LCD_Clear(0xffff);
+    LCD_DrawString(10, 10, 0, 0xFFFF, "GAME OVER!", 16, 0);
+
+    char answer_string[30];
+    sprintf(answer_string, "Correct Answer: %s", answer);
+    LCD_DrawString(10, 50, 0, 0xFFFF, answer_string, 16, 0);
+
+    draw_level();
+    char highscore_string[15];
+    sprintf(highscore_string, "Highscore: %d", highscore);
+    LCD_DrawString(10, 70, 0, 0xFFFF, highscore_string, 16, 0);
+
+    micro_wait(5000000);
+    LCD_Clear(0xffff);
+
+    level = 1;
+    delay = 5000000;
+    lives = 3;
+    length = 3;
+
+    flash_string_on_screen(1000000, "Memory Game Starting...");
+    flash_string_on_screen(1000000, "Type in this string!");
     userin_flag = 0;
 }
 
@@ -340,9 +374,10 @@ void draw_level() {
 }
 
 void generate_answer() {
-    for(int i = 0; i < 5; i++) {
-        answer[i] = keys[rand() % 15];
+    for(int i = 0; i < length; i++) {
+        answer[i] = keys[rand() % (strlen(keys) - 1)];
     }
+    answer[length] = '\0';
 }
 
 int main() {
@@ -368,17 +403,16 @@ int main() {
 
     LCD_Setup();
     mount_sd();
-    
-    save_score(0);
-    save_seed(0);
 
-    highscore = get_score();
+    highscore = get_highscore();
     seed = get_seed();
+
+    printf("SCORE: %d, SEED: %d\n", highscore, seed);
 
     flash_string_on_screen(1000000, "Memory Game Starting...");
     flash_string_on_screen(1000000, "Type in this string!");
 
-    srand(time(0));
+    srand(seed);
     
     while(1) {
         if(userin_flag == 0) {
