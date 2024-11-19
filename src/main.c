@@ -18,6 +18,8 @@ const char* username = "amcgooga";
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "stm32f0xx.h"
 #include "commands.h"
@@ -31,7 +33,7 @@ void nano_wait(unsigned int n);
 
 void micro_wait(unsigned int n) {
     for (int i = 0; i < n; i++) {
-        nano_wait(1000);
+        nano_wait(450);
     }
 }
 
@@ -206,33 +208,44 @@ void init_lcd_spi(){
 // __________________________________________________________________________________________________________________________
 // Game logic
 // __________________________________________________________________________________________________________________________
-
 char user_input[10];    // Buffer to store user input for comparison
 
 // Function to display the flash string for a limited time
 void flash_string_on_screen(int duration, const char *flash_string) {
     LCD_Clear(0xffff);
     LCD_DrawString(10, 10, 0x0000, 0xffff, flash_string, 16, 1);
-    micro_wait(duration);  // Wait for the specified duration (in milliseconds)
-    LCD_Clear(0xffff);  // Clear the screen after flashing
+    micro_wait(duration);
+    LCD_Clear(0xffff);
 }
+
+char keys[] = "123456789ABCD*#";
 
 uint8_t col          = 0;
 int position = 0;
 char user_answer[5];
 int cursor_x = 10;
 int cursor_y = 10;
+int level = 1;
+int delay = 5000000;
+int userin_flag = 0;
+int lives = 3;
 
 void print_on_lcd(char);
 void check_answer(void);
+void game_over();
+void draw_level();
+void draw_lives();
 
 void TIM7_IRQHandler() {
   TIM7 -> SR &= ~TIM_SR_UIF;
   int rows = read_rows();
   if (rows != 0) {
     char key = rows_to_key(rows);
-    printf("%c\n", key);
-    print_on_lcd(key);
+    if(userin_flag == 1) {
+        printf("%c\n", key);
+        user_answer[position] = key;
+        print_on_lcd(key);
+    }
   }
 
 //   char c = disp[col];
@@ -246,7 +259,7 @@ void TIM7_IRQHandler() {
 
 void setup_tim7() {
     RCC -> APB1ENR |= RCC_APB1ENR_TIM7EN;
-    TIM7 -> PSC = 48000 - 1;
+    TIM7 -> PSC = 40000 - 1;
     TIM7 -> ARR = 99;
     TIM7 -> DIER |= TIM_DIER_UIE;
     NVIC -> ISER[0] |= 1 << TIM7_IRQn;
@@ -267,15 +280,16 @@ void print_on_lcd(char key) {
         check_answer();
         position = 0;
         cursor_x = 0;
-        user_answer[0] = '\n';
+        user_answer[0] = '\0';
     }
 }
 
 void check_answer(void) {
     int check  = 1;
-    // for (int i = 0; i < strlen(user_answer); i++) {
-    //     printf("%c", user_answer[i]);
-    // }
+    for (int i = 0; i < 5; i++) {
+        printf("%c", user_answer[i]);
+    }
+    printf("\n");
     for (int i = 0; i < 5; i++) {
         if (answer[i] != user_answer[i]) {
             check = 0;
@@ -284,139 +298,53 @@ void check_answer(void) {
     }
     if (check) {
         flash_string_on_screen(1000000,"Correct!");
+        level++;
+        delay -= 500000;
+        if(delay < 500000) delay = 500000;
+        printf("LEVEL: %d\n", level);
+        printf("DELAY: %d\n", delay);
+        userin_flag = 0;
     }
     else {
         flash_string_on_screen(1000000, "Wrong!");
+        lives--;
+        draw_level();
+        draw_lives();
+        if(lives == 0) {
+            game_over();
+        }
     }
 }
 
-// void print_user_input(void) {
-//     int cursor_x = 10;  // Starting X position for displaying the character
-//     int cursor_y = 10;  // Starting Y position for displaying the character
-//     int current_time = 0;
-    
-//     // Get the start time for the 10-second limit
-//     int start_time = 0;
-    
-//     // Start the input loop
-//     while (1) {
-//         // Capture the current time to check elapsed time
-//         start_time = current_time;
+void game_over() {
+    flash_string_on_screen(10000000, "GAME OVER!");
+    userin_flag = 0;
+}
 
-//         // Wait a small amount (for example, 10 ms) to simulate the loop
-//         micro_wait(10000);  // 10ms interval between each loop iteration
+void draw_lives() {
+    char lives_string[10];
+    sprintf(lives_string, "Lives: %d", lives);
+    printf("%s\n", lives_string);
 
-//         // Update the current time after waiting
-//         current_time += 10000;  // Increment time by 10ms (this is in microseconds)
+    LCD_DrawString(10, 50, 0, 0xFFFF, lives_string, 16, 0);
+}
 
-//         // Exit the loop after the time limit is reached
-//         if (current_time - start_time >= TIME_LIMIT) {
-//             break;  // Exit the loop after 10 seconds
-//         }
+void draw_level() {
+    char level_string[10];
+    sprintf(level_string, "Level: %d", level);
+    printf("%s\n", level_string);
 
-//         // Get the next key press
-//         char key = get_keypress();
+    LCD_DrawString(10, 30, 0, 0xFFFF, level_string, 16, 0);
+}
 
-//         // If the user presses 'Enter' (or a specific "done" key), break the loop
-//         if (key == '*') {
-//             break;  // Exit the loop when Enter is pressed
-//         }
-
-//         // If the user presses 'Backspace' (or another key to delete the last character)
-//         if (key == 'D' && cursor_x > 10) {
-//             // Remove the last character from the LCD display
-//             cursor_x -= 16;  // Move the cursor back for backspace
-//             LCD_DrawChar(cursor_x, cursor_y, 0xFFFF, 0xFFFF, ' ', 16, 1);  // Overwrite with space
-//             continue;
-//         }
-
-//         // If the key is valid (printable ASCII characters)
-//         if (key >= 32 && key <= 126) {  // Printable ASCII characters range
-//             // Display the character on the LCD
-//             LCD_DrawChar(cursor_x, cursor_y, 0x0000, 0xFFFF, key, 16, 1);
-
-//             // Update cursor position for next character
-//             cursor_x += 16;  // Move cursor to the right after displaying each char
-
-//             // Ensure we don't exceed the max input length
-//             if (cursor_x - 10 >= MAX_INPUT_LENGTH * 16) {
-//                 break;  // Stop accepting input if max length reached
-//             }
-//         }
-//     }
-// }
-// // Function to get user input and compare with flashed string
-// int get_and_check_user_input(int length) {
-//     for (int i = 0; i < length; i++) {
-//         user_input[i] = get_keypress();
-//         // Display the current user input (optional visual feedback)
-//         tft_draw_text(10, 30 + i * 10, user_input);
-//     }
-//     user_input[length] = '\0';  // Null-terminate the string
-
-//     // Compare the user input with the flash string
-//     if (strcmp(flash_string, user_input) == 0) {
-//         return 1;  // Correct input
-//     } else {
-//         return 0;  // Incorrect input
-//     }
-// }
-
-
-// // Display Game Instructions
-// void display_instructions(void) {
-//     tft_clear();
-//     tft_draw_text(10, 10, "Game Instructions:");
-//     tft_draw_text(10, 30, "Press A to Start");
-//     tft_draw_text(10, 50, "Move Left: 4");
-//     tft_draw_text(10, 70, "Move Right: 7");
-//     tft_draw_text(10, 90, "Pause: *");
-//     tft_draw_text(10, 110, "Quit: #");
-//     nano_wait(5000);  // Wait for 5 seconds before starting the game
-// }
-
-// void game(void) {
-//     tft_init();  // Initialize TFT
-//     tft_clear();  // Clear the screen
-
-//     // Start the game when 'A' is pressed
-//     while (1) {
-//         char key = get_keypress();
-//         if (key == 'A') {
-//             // Game start logic
-//             score = 0;  // Reset score
-//             int level = 4;  // Starting string length
-//             while (1) {
-//                 generate_flash_string(level); 
-//                 flash_string_on_screen(flash_duration);  // Flash the string
-
-//                 // Get user input and check if it's correct
-//                 if (get_and_check_user_input(level)) {
-// 		    if(level == 10){
-// 			;
-// 	            }
-// 		    else{
-// 		      level++;	
-//                     }
-                    
-// 		    score++;
-//                     snprintf(user_input, sizeof(user_input), "Score: %d", score);
-//                     tft_draw_text(10, 100, user_input);  // Display current score
-//                 } else {
-//                     tft_draw_text(10, 100, "Game Over!");  // Game over
-//                     break;
-//                 }
-
-//                 nano_wait(2000);  // Wait before next round
-//             }
-//         }
-//     }
-// }
-
-// __________________________________________________________________________________________________________________________
-
+void generate_answer() {
+    for(int i = 0; i < 5; i++) {
+        answer[i] = keys[rand() % 15];
+    }
+}
 
 int main() {
+
     internal_clock();
     enable_ports();
     init_usart5();
@@ -442,8 +370,19 @@ int main() {
 
     flash_string_on_screen(1000000, "Memory Game Starting...");
     flash_string_on_screen(1000000, "Type in this string!");
+
+    srand(time(0));
     
-    flash_string_on_screen(1000000, answer);
+    while(1) {
+        if(userin_flag == 0) {
+            generate_answer();
+            printf("ANSWER: %s\n", answer);
+            flash_string_on_screen(delay, answer);
+            draw_level();
+            draw_lives();
+            userin_flag = 1;
+        }
+    }
     // while(1) {
     //     char key = get_keypress();
     //     printf("%c\n", key);
