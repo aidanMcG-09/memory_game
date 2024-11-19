@@ -25,7 +25,7 @@ const char* username = "amcgooga";
 #include "commands.h"
 #include "lcd.h"
 #include "keypad.h"
-#include "score.h"
+#include "store.h"
 #include "fifo.h"
 #include "tty.h"
 
@@ -229,6 +229,8 @@ int level = 1;
 int delay = 5000000;
 int userin_flag = 0;
 int lives = 3;
+int highscore = 0;
+int seed = 0;
 
 void print_on_lcd(char);
 void check_answer(void);
@@ -366,7 +368,12 @@ int main() {
 
     LCD_Setup();
     mount_sd();
-    save_score(65);
+    
+    save_score(0);
+    save_seed(0);
+
+    highscore = get_score();
+    seed = get_seed();
 
     flash_string_on_screen(1000000, "Memory Game Starting...");
     flash_string_on_screen(1000000, "Type in this string!");
